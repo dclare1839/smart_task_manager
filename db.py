@@ -1,81 +1,96 @@
-"""SQLite persistence layer for tasks and calendar events."""
+"""Postgres (Supabase) persistence layer for tasks and calendar events.
+
+Requires DATABASE_URL in the environment — a standard Postgres connection
+string, e.g. from Supabase's Project Settings → Database → Connection string.
+"""
 
 import json
-import sqlite3
-from pathlib import Path
+import os
 
-DB_PATH = Path(__file__).parent / "planner.db"
+import psycopg2
+import psycopg2.extras
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL이 설정되어 있지 않습니다 (.env 확인).")
+    conn = psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 
-def _ensure_column(conn, table: str, column: str, decl: str):
-    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-    if column not in cols:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-
-
 def init_db():
+    """Idempotently ensure the schema exists (safe to run on every startup)."""
     with get_conn() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT NOT NULL,
-                category TEXT NOT NULL,
-                completed INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS categories (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    kind TEXT NOT NULL CHECK (kind IN ('task', 'event')),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    UNIQUE(name, kind)
+                )
+                """
             )
-            """
-        )
-        # Added later: explicit due date/time (from "YYYY-MM-DD HH:MM" in the
-        # task text) and free-form #tags. ALTER TABLE keeps existing rows.
-        _ensure_column(conn, "tasks", "due_date", "TEXT")
-        _ensure_column(conn, "tasks", "due_time", "TEXT")
-        _ensure_column(conn, "tasks", "tags", "TEXT NOT NULL DEFAULT '[]'")
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                category TEXT NOT NULL,
-                date TEXT NOT NULL,
-                start_time TEXT,
-                end_time TEXT,
-                note TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id SERIAL PRIMARY KEY,
+                    text TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    completed BOOLEAN NOT NULL DEFAULT false,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    due_date DATE,
+                    due_time TEXT,
+                    tags JSONB NOT NULL DEFAULT '[]'::jsonb
+                )
+                """
             )
-            """
-        )
-        # Added later: where an event came from, so a Google-synced event can
-        # be told apart from one created locally (and re-synced without
-        # duplicating).
-        _ensure_column(conn, "events", "source", "TEXT NOT NULL DEFAULT 'local'")
-        _ensure_column(conn, "events", "google_event_id", "TEXT")
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                kind TEXT NOT NULL CHECK (kind IN ('task', 'event')),
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                UNIQUE(name, kind)
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS events (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    start_time TEXT,
+                    end_time TEXT,
+                    note TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    source TEXT NOT NULL DEFAULT 'local',
+                    google_event_id TEXT UNIQUE
+                )
+                """
             )
-            """
-        )
-        # Backfill categories table from any category values already used,
-        # so upgrading an existing planner.db doesn't lose known categories.
-        conn.execute(
-            "INSERT OR IGNORE INTO categories (name, kind) SELECT DISTINCT category, 'task' FROM tasks"
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO categories (name, kind) SELECT DISTINCT category, 'event' FROM events"
-        )
+            # Backfill categories from any category values already in use.
+            cur.execute(
+                "INSERT INTO categories (name, kind) "
+                "SELECT DISTINCT category, 'task' FROM tasks "
+                "ON CONFLICT (name, kind) DO NOTHING"
+            )
+            cur.execute(
+                "INSERT INTO categories (name, kind) "
+                "SELECT DISTINCT category, 'event' FROM events "
+                "ON CONFLICT (name, kind) DO NOTHING"
+            )
         conn.commit()
+
+
+def _jsonify(value) -> str:
+    return json.dumps(value or [], ensure_ascii=False)
+
+
+def _to_iso(value):
+    """Postgres DATE/TIMESTAMPTZ columns come back as date/datetime objects;
+    stringify them so the rest of the app (and JSON responses) sees the same
+    plain ISO strings it always has."""
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
 
 
 # ---------------- Categories ----------------
@@ -83,23 +98,25 @@ def init_db():
 def upsert_category(name: str, kind: str):
     """Register a category name if it isn't already known (no-op otherwise)."""
     with get_conn() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO categories (name, kind) VALUES (?, ?)", (name, kind)
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO categories (name, kind) VALUES (%s, %s) ON CONFLICT (name, kind) DO NOTHING",
+                (name, kind),
+            )
         conn.commit()
 
 
 def get_categories(kind: str) -> list:
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT name FROM categories WHERE kind = ? ORDER BY id ASC", (kind,)
-        ).fetchall()
-        return [r["name"] for r in rows]
+        with conn.cursor() as cur:
+            cur.execute("SELECT name FROM categories WHERE kind = %s ORDER BY id ASC", (kind,))
+            return [r["name"] for r in cur.fetchall()]
 
 
 def delete_category(name: str, kind: str):
     with get_conn() as conn:
-        conn.execute("DELETE FROM categories WHERE name = ? AND kind = ?", (name, kind))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM categories WHERE name = %s AND kind = %s", (name, kind))
         conn.commit()
 
 
@@ -112,103 +129,138 @@ def rename_category(kind: str, old_name: str, new_name: str):
     """
     table = "tasks" if kind == "task" else "events"
     with get_conn() as conn:
-        conn.execute("INSERT OR IGNORE INTO categories (name, kind) VALUES (?, ?)", (new_name, kind))
-        conn.execute(f"UPDATE {table} SET category = ? WHERE category = ?", (new_name, old_name))
-        conn.execute("DELETE FROM categories WHERE name = ? AND kind = ?", (old_name, kind))
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO categories (name, kind) VALUES (%s, %s) ON CONFLICT (name, kind) DO NOTHING",
+                (new_name, kind),
+            )
+            cur.execute(f"UPDATE {table} SET category = %s WHERE category = %s", (new_name, old_name))
+            cur.execute("DELETE FROM categories WHERE name = %s AND kind = %s", (old_name, kind))
         conn.commit()
 
 
 # ---------------- Tasks ----------------
 
 def _task_dict(row) -> dict:
+    if row is None:
+        return None
     d = dict(row)
-    try:
-        d["tags"] = json.loads(d.get("tags") or "[]")
-    except (TypeError, ValueError):
-        d["tags"] = []
+    tags = d.get("tags")
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except (TypeError, ValueError):
+            tags = []
+    d["tags"] = tags or []
+    d["due_date"] = _to_iso(d.get("due_date"))
+    d["created_at"] = _to_iso(d.get("created_at"))
     return d
 
 
 def insert_task(text: str, category: str, due_date: str = None, due_time: str = None, tags: list = None) -> dict:
     with get_conn() as conn:
-        cur = conn.execute(
-            """INSERT INTO tasks (text, category, due_date, due_time, tags)
-               VALUES (?, ?, ?, ?, ?)""",
-            (text, category, due_date, due_time, json.dumps(tags or [], ensure_ascii=False)),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO tasks (text, category, due_date, due_time, tags)
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                (text, category, due_date, due_time, _jsonify(tags)),
+            )
+            task_id = cur.fetchone()["id"]
+            cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
         conn.commit()
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _task_dict(row)
 
 
 def get_tasks() -> list:
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM tasks ORDER BY created_at DESC").fetchall()
-        return [_task_dict(r) for r in rows]
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM tasks ORDER BY created_at DESC")
+            return [_task_dict(r) for r in cur.fetchall()]
 
 
 def get_tasks_due_between(start_date: str, end_date: str) -> list:
     with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT * FROM tasks WHERE due_date IS NOT NULL AND due_date BETWEEN ? AND ?
-               ORDER BY due_date, due_time""",
-            (start_date, end_date),
-        ).fetchall()
-        return [_task_dict(r) for r in rows]
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT * FROM tasks WHERE due_date IS NOT NULL AND due_date BETWEEN %s AND %s
+                   ORDER BY due_date, due_time""",
+                (start_date, end_date),
+            )
+            return [_task_dict(r) for r in cur.fetchall()]
 
 
 def toggle_task_completed(task_id: int):
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        if not row:
-            return None
-        new_val = 0 if row["completed"] else 1
-        conn.execute("UPDATE tasks SET completed = ? WHERE id = ?", (new_val, task_id))
+        with conn.cursor() as cur:
+            cur.execute("SELECT completed FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            cur.execute(
+                "UPDATE tasks SET completed = %s WHERE id = %s", (not row["completed"], task_id)
+            )
+            cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
         conn.commit()
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_dict(row)
 
 
 def delete_task(task_id: int):
     with get_conn() as conn:
-        conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
         conn.commit()
 
 
 def set_task_text(task_id: int, text: str):
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        if not row:
-            return None
-        conn.execute("UPDATE tasks SET text = ? WHERE id = ?", (text, task_id))
+        with conn.cursor() as cur:
+            cur.execute("UPDATE tasks SET text = %s WHERE id = %s", (text, task_id))
+            if cur.rowcount == 0:
+                return None
+            cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
         conn.commit()
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_dict(row)
 
 
 def set_task_category(task_id: int, category: str):
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        if not row:
-            return None
-        conn.execute("UPDATE tasks SET category = ? WHERE id = ?", (category, task_id))
+        with conn.cursor() as cur:
+            cur.execute("UPDATE tasks SET category = %s WHERE id = %s", (category, task_id))
+            if cur.rowcount == 0:
+                return None
+            cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
         conn.commit()
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_dict(row)
 
 
 # ---------------- Events ----------------
 
+def _event_dict(row) -> dict:
+    if row is None:
+        return None
+    d = dict(row)
+    d["date"] = _to_iso(d.get("date"))
+    d["created_at"] = _to_iso(d.get("created_at"))
+    return d
+
+
 def insert_event(title, category, event_date, start_time=None, end_time=None, note=None) -> dict:
     with get_conn() as conn:
-        cur = conn.execute(
-            """INSERT INTO events (title, category, date, start_time, end_time, note)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (title, category, event_date, start_time, end_time, note),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO events (title, category, date, start_time, end_time, note)
+                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+                (title, category, event_date, start_time, end_time, note),
+            )
+            event_id = cur.fetchone()["id"]
+            cur.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            row = cur.fetchone()
         conn.commit()
-        row = conn.execute("SELECT * FROM events WHERE id = ?", (cur.lastrowid,)).fetchone()
-        return dict(row)
+        return _event_dict(row)
 
 
 def upsert_google_event(
@@ -218,38 +270,41 @@ def upsert_google_event(
     """Insert or update an event pulled from Google Calendar, keyed by its
     Google event id so repeated syncs don't create duplicates."""
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT id FROM events WHERE google_event_id = ?", (google_event_id,)
-        ).fetchone()
-        if row:
-            conn.execute(
-                """UPDATE events SET title=?, category=?, date=?, start_time=?, end_time=?, note=?
-                   WHERE google_event_id=?""",
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO events (title, category, date, start_time, end_time, note, source, google_event_id)
+                VALUES (%s, %s, %s, %s, %s, %s, 'google', %s)
+                ON CONFLICT (google_event_id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    category = EXCLUDED.category,
+                    date = EXCLUDED.date,
+                    start_time = EXCLUDED.start_time,
+                    end_time = EXCLUDED.end_time,
+                    note = EXCLUDED.note
+                RETURNING id
+                """,
                 (title, category, event_date, start_time, end_time, note, google_event_id),
             )
-            event_id = row["id"]
-        else:
-            cur = conn.execute(
-                """INSERT INTO events (title, category, date, start_time, end_time, note, source, google_event_id)
-                   VALUES (?, ?, ?, ?, ?, ?, 'google', ?)""",
-                (title, category, event_date, start_time, end_time, note, google_event_id),
-            )
-            event_id = cur.lastrowid
+            event_id = cur.fetchone()["id"]
+            cur.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            row = cur.fetchone()
         conn.commit()
-        row = conn.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
-        return dict(row)
+        return _event_dict(row)
 
 
 def get_events_between(start_date: str, end_date: str) -> list:
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM events WHERE date BETWEEN ? AND ? ORDER BY date, start_time",
-            (start_date, end_date),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM events WHERE date BETWEEN %s AND %s ORDER BY date, start_time",
+                (start_date, end_date),
+            )
+            return [_event_dict(r) for r in cur.fetchall()]
 
 
 def delete_event(event_id: int):
     with get_conn() as conn:
-        conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM events WHERE id = %s", (event_id,))
         conn.commit()
