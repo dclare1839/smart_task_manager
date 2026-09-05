@@ -9,14 +9,47 @@ import os
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
+
+# A fresh psycopg2.connect() per request means a full TCP+TLS handshake to
+# Supabase every time — the Render↔Supabase cross-region hop makes that cost
+# very noticeable (~1s+). Pool connections instead so requests reuse an
+# already-open connection.
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise RuntimeError("DATABASE_URL이 설정되어 있지 않습니다 (.env 확인).")
+        _pool = psycopg2.pool.ThreadedConnectionPool(
+            1, 10, dsn, cursor_factory=psycopg2.extras.RealDictCursor
+        )
+    return _pool
+
+
+class _PooledConn:
+    """`with get_conn() as conn:` borrows a connection from the pool and
+    always returns it afterward, instead of opening/closing a new one."""
+
+    def __enter__(self):
+        self.conn = _get_pool().getconn()
+        return self.conn
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            try:
+                self.conn.rollback()
+            except Exception:
+                pass
+        _get_pool().putconn(self.conn)
+        return False
 
 
 def get_conn():
-    dsn = os.environ.get("DATABASE_URL")
-    if not dsn:
-        raise RuntimeError("DATABASE_URL이 설정되어 있지 않습니다 (.env 확인).")
-    conn = psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
-    return conn
+    return _PooledConn()
 
 
 def init_db():
