@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Task Planner</title>
+  <link rel="stylesheet" href="style.css?v=2" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>🧭 Smart Task Planner</h1>
+      <span id="llm-status" class="badge">확인 중...</span>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="tasks">✅ 할 일</button>
+      <button class="tab-btn" data-tab="calendar">📅 캘린더 / 브리핑</button>
+    </nav>
+
+    <!-- Tasks Tab -->
+    <section id="tasks" class="tab-panel active">
+      <form id="task-form" class="input-row">
+        <input id="task-input" type="text" placeholder="예: 아이엘츠 단어 공부하기 #영어 2026-09-10 15:00" autocomplete="off" />
+        <select id="task-category-select">
+          <option value="">자동 분류 (AI)</option>
+        </select>
+        <button type="submit">추가</button>
+      </form>
+      <p class="format-hint">💡 <code>#태그</code>로 태그를 달고, <code>YYYY-MM-DD HH:MM</code>을 적으면 마감 날짜/시간으로 정확히 인식돼요.</p>
+
+      <div class="mini-toolbar">
+        <button id="new-category-btn" type="button" class="ghost-btn">+ 새 카테고리</button>
+        <button id="task-event-toggle-btn" type="button" class="ghost-btn">📅 일정도 추가하기</button>
+      </div>
+
+      <form id="new-category-form" class="input-row inline-form" hidden>
+        <input id="new-category-input" type="text" placeholder="새 카테고리 이름 (예: 자기계발)" autocomplete="off" />
+        <button type="submit">만들기</button>
+        <button type="button" id="new-category-cancel" class="ghost-btn">취소</button>
+      </form>
+
+      <form id="task-event-form" class="input-row inline-form" hidden>
+        <input id="task-event-input" type="text" placeholder="예: 다음 주 화요일 오후 2시 치과 예약" autocomplete="off" />
+        <button type="submit">캘린더에 추가</button>
+      </form>
+      <div id="task-event-msg" class="hint-msg" hidden></div>
+
+      <div id="tag-filter" class="tag-filter" hidden></div>
+
+      <div id="task-groups" class="groups"></div>
+    </section>
+
+    <!-- Calendar Tab -->
+    <section id="calendar" class="tab-panel">
+      <form id="event-form" class="input-row">
+        <input id="event-input" type="text" placeholder="예: 9월 10일 오후 3시 치과 예약" autocomplete="off" />
+        <button type="submit">분석하기</button>
+      </form>
+      <p class="format-hint">💡 Claude가 내용을 분석해 기존 카테고리 중 맞는 걸 추천하거나, 없으면 새 카테고리를 요약해서 제안해요. <code>YYYY-MM-DD HH:MM</code> 형식으로 적으면 날짜/시간은 그대로 정확히 반영돼요.</p>
+
+      <div id="event-draft-card" class="draft-card" hidden>
+        <div class="draft-row">
+          <strong id="draft-title"></strong>
+          <span id="draft-when" class="event-sub"></span>
+        </div>
+        <div id="draft-note" class="event-sub" hidden></div>
+        <div class="draft-row draft-category-row">
+          <label for="draft-category-select">카테고리</label>
+          <select id="draft-category-select"></select>
+          <span id="draft-category-badge" class="badge-inline"></span>
+        </div>
+        <div class="draft-actions">
+          <button id="draft-confirm-btn" type="button">추가 확정</button>
+          <button id="draft-cancel-btn" type="button" class="ghost-btn">취소</button>
+        </div>
+      </div>
+
+      <div class="calendar-header">
+        <button id="cal-prev" type="button" title="이전 달">◀</button>
+        <span id="cal-month-label"></span>
+        <button id="cal-next" type="button" title="다음 달">▶</button>
+        <button id="cal-today" type="button" class="ghost-btn">오늘</button>
+      </div>
+
+      <div class="calendar-grid" id="calendar-grid"></div>
+
+      <div class="google-cal-bar">
+        <span id="google-cal-status">Google 캘린더: 확인 중...</span>
+        <a id="google-cal-connect-link" href="#" target="_blank" rel="noopener" hidden>연결하기</a>
+        <button id="google-cal-sync-btn" type="button" class="ghost-btn" hidden>지금 동기화</button>
+      </div>
+
+      <div class="briefing-controls">
+        <button class="period-btn active" data-period="daily">일별</button>
+        <button class="period-btn" data-period="weekly">주별</button>
+        <button class="period-btn" data-period="monthly">월별</button>
+        <button class="period-btn" data-period="custom">기간 선택</button>
+        <span id="briefing-range" class="ref-nav"></span>
+      </div>
+
+      <form id="custom-range-form" class="input-row inline-form" hidden>
+        <input type="date" id="custom-start" />
+        <span class="range-sep">~</span>
+        <input type="date" id="custom-end" />
+        <button type="submit">조회</button>
+      </form>
+
+      <div id="briefing-box" class="briefing-box"></div>
+      <div id="event-list" class="event-list"></div>
+    </section>
+  </div>
+
+  <div id="day-detail-backdrop" class="modal-backdrop" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <strong id="day-detail-title"></strong>
+        <button id="day-detail-close" type="button" class="icon-btn" title="닫기">✕</button>
+      </div>
+      <div id="day-detail-body" class="event-list"></div>
+    </div>
+  </div>
+
+  <script src="app.js?v=2"></script>
+</body>
+</html>

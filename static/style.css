@@ -1,0 +1,798 @@
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --border: #e4e6eb;
+  --accent: #4f46e5;
+  --accent-light: #eef0ff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --warning-light: #fffbeb;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+button, input, select {
+  touch-action: manipulation; /* skip the ~300ms double-tap-zoom delay on iOS */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 16px 12px 48px;
+  }
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.app-header h1 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.badge.offline {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.input-row input {
+  flex: 1 1 200px;
+  min-width: 0; /* let the input actually shrink instead of forcing overflow */
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 16px; /* 16px avoids iOS Safari auto-zooming in on focus */
+  background: var(--card);
+}
+
+@media (max-width: 480px) {
+  .input-row input[type="text"] {
+    flex-basis: 100%; /* own row — a select/button sharing the row with it gets cramped on phones */
+  }
+}
+
+.input-row input:focus {
+  outline: 2px solid var(--accent);
+  border-color: transparent;
+}
+
+.input-row button {
+  flex: 0 0 auto;
+  min-height: 44px; /* Apple HIG minimum comfortable tap target */
+  padding: 12px 18px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.input-row button:hover { opacity: 0.9; }
+
+select#task-category-select {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 12px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 16px;
+  color: var(--text);
+  max-width: 220px;
+}
+
+.mini-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.ghost-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  background: var(--card);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghost-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.inline-form {
+  margin-bottom: 14px;
+}
+
+.range-sep {
+  color: var(--muted);
+  align-self: center;
+}
+
+.format-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -12px 0 16px;
+}
+
+.format-hint code {
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.hint-msg {
+  font-size: 13px;
+  color: var(--success);
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: -6px 0 14px;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.group-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.group-card.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.group-card h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.category-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.group-drop-hint {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+.inline-edit-input {
+  font-size: 16px; /* avoid iOS Safari zoom-on-focus */
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--card);
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
+}
+
+.task-item, .event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  cursor: grab;
+}
+
+.task-item:active { cursor: grabbing; }
+
+.task-item.dragging { opacity: 0.4; }
+
+.task-item:last-child, .event-item:last-child { border-bottom: none; }
+
+.task-item.completed .task-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.task-item {
+  gap: 8px;
+}
+
+.task-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.task-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-text {
+  overflow-wrap: break-word;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.due-badge {
+  font-size: 11px;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tag-chip {
+  font-size: 11px;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.check-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+  margin-top: 1px;
+}
+
+.check-btn:hover { border-color: var(--success); }
+
+.check-btn.checked {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.check-btn.checked::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.check-btn.small {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+}
+
+.check-btn.small.checked::after { font-size: 10px; }
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border-radius: 6px;
+}
+
+.icon-btn:hover { background: var(--accent-light); }
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  flex: 0 0 auto;
+  padding: 10px 2px;
+  margin: -10px -2px;
+}
+
+.delete-btn:hover { color: #dc2626; }
+
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 30px 0;
+  font-size: 14px;
+}
+
+.briefing-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.period-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.period-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.ref-nav {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.briefing-box {
+  background: linear-gradient(135deg, var(--accent-light), #ffffff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.event-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.event-meta > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kind-icon {
+  font-size: 12px;
+}
+
+.event-title {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.event-title.completed-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.event-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+
+/* ---------------- Month calendar grid ---------------- */
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.calendar-header button {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  min-height: 36px;
+}
+
+#cal-month-label {
+  font-weight: 700;
+  font-size: 16px;
+  min-width: 100px;
+  text-align: center;
+}
+
+#cal-today {
+  border-radius: 999px !important;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  margin-bottom: 16px;
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 4px 0 8px;
+}
+
+.cal-weekday.sun { color: #dc2626; }
+.cal-weekday.sat { color: #2563eb; }
+
+.cal-cell {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 4px 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+}
+
+@media (min-width: 420px) {
+  .cal-cell { min-height: 56px; }
+}
+
+.cal-cell:hover { background: var(--bg); }
+
+.cal-cell.other-month { opacity: 0.35; }
+
+.cal-cell.today .cal-daynum {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.cal-cell.selected {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.cal-daynum {
+  font-size: 12px;
+  font-weight: 600;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.cal-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.cal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.cal-dot.task {
+  border-radius: 2px;
+}
+
+.cal-more {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ---------------- Event draft/confirm card ---------------- */
+
+.draft-card {
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: -6px 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.draft-category-row select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 16px; /* avoid iOS Safari zoom-on-focus */
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.draft-actions {
+  flex-wrap: wrap;
+}
+
+.draft-actions button {
+  flex: 1 1 auto;
+  min-height: 44px;
+}
+
+.badge-inline {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.badge-inline.new {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.draft-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.draft-actions button[type="button"]:first-child {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---------------- Tag filter (Tasks tab) ---------------- */
+
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.tag-filter-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tag-filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* ---------------- Day detail modal ---------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 30, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: 0;
+}
+
+@media (min-width: 560px) {
+  .modal-backdrop {
+    align-items: center;
+    padding: 20px;
+  }
+}
+
+.modal-card {
+  background: var(--bg);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 16px 16px 0 0;
+  padding: 16px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+}
+
+@media (min-width: 560px) {
+  .modal-card {
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal-header strong {
+  font-size: 16px;
+}
+
+/* ---------------- Google Calendar bar ---------------- */
+
+.google-cal-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.google-cal-bar a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.google-cal-bar a:hover {
+  text-decoration: underline;
+}
