@@ -12,6 +12,10 @@ import json
 DEFAULT_CATEGORIES = ["영어", "업무", "학습", "운동/건강", "개인", "재정", "여가", "기타"]
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+# Categorization/parsing is a quick, simple classification task done on every
+# add — a fast model keeps that from being the slow part of "add a task".
+# Briefing generation (prose) still uses MODEL above for better quality.
+FAST_MODEL = os.environ.get("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001")
 
 _client = None
 _client_checked = False
@@ -46,13 +50,13 @@ def _extract_text(resp) -> str:
     return ""
 
 
-def _call_claude_json(prompt: str, max_tokens: int = 500):
+def _call_claude_json(prompt: str, max_tokens: int = 500, model: str = FAST_MODEL):
     client = _get_client()
     if client is None:
         return None
     try:
         resp = client.messages.create(
-            model=MODEL,
+            model=model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
