@@ -223,6 +223,19 @@ def get_tasks_due_between(start_date: str, end_date: str) -> list:
             return [_task_dict(r) for r in cur.fetchall()]
 
 
+def get_upcoming_tasks_due(from_date: str, limit: int) -> list:
+    """Not-yet-completed tasks due today or later, soonest first — used for
+    the home tab's at-a-glance agenda."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT * FROM tasks WHERE due_date IS NOT NULL AND due_date >= %s AND completed = false
+                   ORDER BY due_date, due_time LIMIT %s""",
+                (from_date, limit),
+            )
+            return [_task_dict(r) for r in cur.fetchall()]
+
+
 def toggle_task_completed(task_id: int):
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -332,6 +345,17 @@ def get_events_between(start_date: str, end_date: str) -> list:
             cur.execute(
                 "SELECT * FROM events WHERE date BETWEEN %s AND %s ORDER BY date, start_time",
                 (start_date, end_date),
+            )
+            return [_event_dict(r) for r in cur.fetchall()]
+
+
+def get_upcoming_events(from_date: str, limit: int) -> list:
+    """Events today or later, soonest first — used for the home tab."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM events WHERE date >= %s ORDER BY date, start_time LIMIT %s",
+                (from_date, limit),
             )
             return [_event_dict(r) for r in cur.fetchall()]
 

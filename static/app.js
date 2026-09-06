@@ -2,7 +2,15 @@ const API = "/api";
 
 // ---------------- Tab switching ----------------
 document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+  btn.addEventListener("click", () => {
+    activateTab(btn.dataset.tab);
+    if (btn.dataset.tab === "home") refreshHome();
+  });
+});
+
+// Buttons inside a tab panel (e.g. "캘린더 보기") that jump to another tab.
+document.querySelectorAll("[data-tab-link]").forEach((btn) => {
+  btn.addEventListener("click", () => activateTab(btn.dataset.tabLink));
 });
 
 function activateTab(tab) {
@@ -727,6 +735,92 @@ function renderAgendaInto(container, events, tasks, onChange) {
   });
 }
 
+// ---------------- Home tab ----------------
+let homeTasksExpanded = false;
+const homeTasksToggleBtn = document.getElementById("home-tasks-toggle-btn");
+
+function refreshHome() {
+  return Promise.all([loadHomeAgenda(), loadHomeTasks()]);
+}
+
+async function loadHomeAgenda() {
+  const res = await fetch(`${API}/upcoming?limit=10`);
+  const data = await res.json();
+  renderAgendaInto(document.getElementById("home-agenda"), data.events, data.tasks, async () => {
+    await Promise.all([loadHomeAgenda(), loadHomeTasks(), loadTasks(), refreshCalendarViews()]);
+  });
+}
+
+async function loadHomeTasks() {
+  const res = await fetch(`${API}/tasks?grouped=true`);
+  renderHomeTasks(await res.json());
+}
+
+function renderHomeTasks(groups) {
+  const container = document.getElementById("home-task-groups");
+  container.innerHTML = "";
+  const allCategories = Object.keys(groups);
+
+  if (allCategories.length === 0) {
+    container.innerHTML = `<div class="empty-state">아직 등록된 할 일이 없습니다.</div>`;
+    homeTasksToggleBtn.hidden = true;
+    return;
+  }
+
+  const categoriesToShow = homeTasksExpanded ? allCategories : allCategories.slice(0, 3);
+
+  categoriesToShow.forEach((cat) => {
+    const items = groups[cat];
+    const itemsToShow = homeTasksExpanded ? items : items.slice(0, 3);
+
+    const card = document.createElement("div");
+    card.className = "group-card";
+    card.innerHTML = `<h3>${escapeHtml(cat)} (${items.length})</h3>`;
+
+    itemsToShow.forEach((t) => {
+      const row = document.createElement("div");
+      row.className = "task-item" + (t.completed ? " completed" : "");
+      row.innerHTML = `
+        <div class="task-left">
+          <button class="check-btn ${t.completed ? "checked" : ""}" data-id="${t.id}" title="완료 처리"></button>
+          <span class="task-text">${escapeHtml(t.text)}</span>
+        </div>
+      `;
+      card.appendChild(row);
+    });
+
+    if (items.length === 0) {
+      const hint = document.createElement("div");
+      hint.className = "group-drop-hint";
+      hint.textContent = "여기엔 할 일이 없습니다.";
+      card.appendChild(hint);
+    } else if (!homeTasksExpanded && items.length > 3) {
+      const more = document.createElement("div");
+      more.className = "group-drop-hint";
+      more.textContent = `+${items.length - 3}개 더 있음`;
+      card.appendChild(more);
+    }
+
+    container.appendChild(card);
+  });
+
+  const hasMore = allCategories.length > 3 || allCategories.some((c) => groups[c].length > 3);
+  homeTasksToggleBtn.hidden = !hasMore;
+  homeTasksToggleBtn.textContent = homeTasksExpanded ? "간단히 보기" : "전체 보기";
+
+  container.querySelectorAll(".check-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await fetch(`${API}/tasks/${btn.dataset.id}/toggle`, { method: "PATCH" });
+      await Promise.all([loadHomeTasks(), loadHomeAgenda(), loadTasks(), refreshCalendarViews()]);
+    });
+  });
+}
+
+homeTasksToggleBtn.addEventListener("click", () => {
+  homeTasksExpanded = !homeTasksExpanded;
+  loadHomeTasks();
+});
+
 // ---------------- Day detail modal ----------------
 const dayDetailBackdrop = document.getElementById("day-detail-backdrop");
 const dayDetailTitle = document.getElementById("day-detail-title");
@@ -813,6 +907,7 @@ googleSyncBtn.addEventListener("click", async () => {
 
 // ---------------- Init ----------------
 checkHealth();
+refreshHome();
 loadTasks();
 renderCalendarGrid();
 loadBriefing();

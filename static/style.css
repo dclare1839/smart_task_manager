@@ -796,3 +796,28 @@ select#task-category-select {
 .google-cal-bar a:hover {
   text-decoration: underline;
 }
+
+/* ---------------- Home tab ---------------- */
+
+.home-section {
+  margin-bottom: 24px;
+}
+
+.home-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.home-section-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.home-section-actions {
+  display: flex;
+  gap: 8px;
+}

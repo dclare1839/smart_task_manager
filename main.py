@@ -312,6 +312,28 @@ def get_schedule(start: str, end: str):
     }
 
 
+@app.get("/api/upcoming")
+def get_upcoming(limit: int = 10):
+    """The next `limit` events/due-tasks from today onward — the home tab's
+    at-a-glance agenda. Completed tasks are left out."""
+    today = date.today().isoformat()
+    events = db.get_upcoming_events(today, limit)
+    tasks = db.get_upcoming_tasks_due(today, limit)
+
+    combined = [
+        {"date": e["date"], "time": e.get("start_time") or "", "kind": "event", "data": e} for e in events
+    ] + [
+        {"date": t["due_date"], "time": t.get("due_time") or "", "kind": "task", "data": t} for t in tasks
+    ]
+    combined.sort(key=lambda c: (c["date"], c["time"] or "99:99"))
+    combined = combined[:limit]
+
+    return {
+        "events": [c["data"] for c in combined if c["kind"] == "event"],
+        "tasks": [c["data"] for c in combined if c["kind"] == "task"],
+    }
+
+
 @app.delete("/api/events/{event_id}")
 def delete_event(event_id: int):
     db.delete_event(event_id)

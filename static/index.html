@@ -14,12 +14,35 @@
     </header>
 
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="tasks">✅ 할 일</button>
+      <button class="tab-btn active" data-tab="home">🏠 홈</button>
+      <button class="tab-btn" data-tab="tasks">✅ 할 일</button>
       <button class="tab-btn" data-tab="calendar">📅 캘린더 / 브리핑</button>
     </nav>
 
+    <!-- Home Tab -->
+    <section id="home" class="tab-panel active">
+      <div class="home-section">
+        <div class="home-section-header">
+          <h2>다가오는 일정</h2>
+          <button class="ghost-btn" type="button" data-tab-link="calendar">캘린더 보기</button>
+        </div>
+        <div id="home-agenda" class="event-list"></div>
+      </div>
+
+      <div class="home-section">
+        <div class="home-section-header">
+          <h2>할 일</h2>
+          <div class="home-section-actions">
+            <button class="ghost-btn" type="button" id="home-tasks-toggle-btn" hidden>전체 보기</button>
+            <button class="ghost-btn" type="button" data-tab-link="tasks">할 일 탭으로</button>
+          </div>
+        </div>
+        <div id="home-task-groups" class="groups"></div>
+      </div>
+    </section>
+
     <!-- Tasks Tab -->
-    <section id="tasks" class="tab-panel active">
+    <section id="tasks" class="tab-panel">
       <form id="task-form" class="input-row">
         <input id="task-input" type="text" placeholder="예: 아이엘츠 단어 공부하기 #영어 2026-09-10 15:00" autocomplete="off" />
         <select id="task-category-select">
